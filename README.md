@@ -89,6 +89,7 @@ ROC Curves — 14 Pathologies × 3 Models
 ### Confusion Matrices
 <img width="1268" height="784" alt="Screenshot 2026-05-31 224718" src="https://github.com/user-attachments/assets/cd1e6a13-5d34-4c26-b0de-f01e490b7ae3" />
 ### XAI
+
 Explainability is a first-class concern in medical AI. Three complementary methods are implemented.
 Grad-CAM + EigenCAM + Confidence Scores
 For each pathology, the notebook shows:

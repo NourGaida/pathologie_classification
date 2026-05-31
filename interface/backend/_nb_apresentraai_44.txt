@@ -1,0 +1,220 @@
+# ==========================================================
+# RECONSTRUCTION AUTOMATIQUE DES MODELES + LOADERS
+# Puis création des wrappers XAI
+# ==========================================================
+
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+
+# ==========================================================
+# 1. Vérifier ce qui existe déjà
+# ==========================================================
+
+print("train_loader :", 'train_loader' in globals())
+print("trainer_dn   :", 'trainer_dn'   in globals())
+print("trainer_rn   :", 'trainer_rn'   in globals())
+print("trainer_en   :", 'trainer_en'   in globals())
+
+# ==========================================================
+# 2. RECONSTRUIRE LES LOADERS SI ABSENTS
+# ==========================================================
+
+if 'train_loader' not in globals():
+
+    print("\n⏳ Reconstruction des DataLoaders...")
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=16,
+        shuffle=True,
+        num_workers=2,
+        pin_memory=True
+    )
+
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=16,
+        shuffle=False,
+        num_workers=2,
+        pin_memory=True
+    )
+
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=16,
+        shuffle=False,
+        num_workers=2,
+        pin_memory=True
+    )
+
+    print("✅ DataLoaders reconstruits")
+
+# ==========================================================
+# 3. Détection N_META
+# ==========================================================
+
+sample_imgs, sample_meta, sample_labels = next(iter(train_loader))
+
+N_META = sample_meta.shape[1]
+
+print(f"\n✅ N_META = {N_META}")
+
+# ==========================================================
+# 4. RECONSTRUIRE LES MODELES SI ABSENTS
+# ==========================================================
+
+if 'trainer_dn' not in globals():
+
+    print("\n⏳ Reconstruction DenseNet121...")
+
+    model_dn = build_model(
+        'densenet121',
+        NUM_CLASSES,
+        N_META
+    ).to(DEVICE)
+
+    trainer_dn = type('tmp', (), {})()
+    trainer_dn.model = model_dn
+
+    print("✅ DenseNet121 reconstruit")
+
+# ----------------------------------------------------------
+
+if 'trainer_rn' not in globals():
+
+    print("\n⏳ Reconstruction ResNet50...")
+
+    model_rn = build_model(
+        'resnet50',
+        NUM_CLASSES,
+        N_META
+    ).to(DEVICE)
+
+    trainer_rn = type('tmp', (), {})()
+    trainer_rn.model = model_rn
+
+    print("✅ ResNet50 reconstruit")
+
+# ----------------------------------------------------------
+
+if 'trainer_en' not in globals():
+
+    print("\n⏳ Reconstruction EfficientNet-B4...")
+
+    model_en = build_model(
+        'efficientnet_b4',
+        NUM_CLASSES,
+        N_META
+    ).to(DEVICE)
+
+    trainer_en = type('tmp', (), {})()
+    trainer_en.model = model_en
+
+    print("✅ EfficientNet-B4 reconstruit")
+
+# ==========================================================
+# 5. Wrapper XAI
+# ==========================================================
+
+class ModelWrapperXAI(nn.Module):
+
+    def __init__(self, model, fixed_meta):
+
+        super().__init__()
+
+        self.model = model
+        self.fixed_meta = fixed_meta.to(DEVICE)
+
+    def forward(self, x):
+
+        meta = self.fixed_meta.expand(x.size(0), -1)
+
+        return self.model(x, meta)
+
+# ==========================================================
+# 6. Metadata moyenne
+# ==========================================================
+
+all_meta = []
+
+print("\n⏳ Calcul metadata moyenne...")
+
+for idx, (_, metas, _) in enumerate(train_loader):
+
+    all_meta.append(metas)
+
+    if idx >= 10:
+        break
+
+all_meta = torch.cat(all_meta, dim=0)
+
+fixed_meta_val = all_meta.mean(dim=0, keepdim=True)
+
+print("✅ Metadata moyenne calculée")
+
+# ==========================================================
+# 7. Création wrappers
+# ==========================================================
+
+wrapper_dn = ModelWrapperXAI(
+    trainer_dn.model,
+    fixed_meta_val
+).eval().to(DEVICE)
+
+wrapper_rn = ModelWrapperXAI(
+    trainer_rn.model,
+    fixed_meta_val
+).eval().to(DEVICE)
+
+wrapper_en = ModelWrapperXAI(
+    trainer_en.model,
+    fixed_meta_val
+).eval().to(DEVICE)
+
+# ==========================================================
+# 8. Target layers
+# ==========================================================
+
+def get_target_layer(model_name, model_wrapper):
+
+    backbone = model_wrapper.model.backbone
+
+    if 'densenet' in model_name:
+        return [backbone.features.denseblock4.denselayer16.conv2]
+
+    elif 'resnet' in model_name:
+        return [backbone.layer4[-1]]
+
+    elif 'efficientnet' in model_name:
+        return [backbone.blocks[-1][-1]]
+
+# ==========================================================
+# 9. Layers XAI
+# ==========================================================
+
+tl_dn = get_target_layer(
+    'densenet121',
+    wrapper_dn
+)
+
+tl_rn = get_target_layer(
+    'resnet50',
+    wrapper_rn
+)
+
+tl_en = get_target_layer(
+    'efficientnet_b4',
+    wrapper_en
+)
+
+print("\n✅ XAI prêt")
+
+print("\nDenseNet121")
+print(tl_dn)
+
+print("\nResNet50")
+print(tl_rn)
+
+print("\nEfficientNet-B4")
+print(tl_en)

@@ -1,0 +1,102 @@
+def run_gradcam_eigencam(wrapper, target_layers, model_name, n_samples=3):
+    """Génère Grad-CAM + EigenCAM pour n_samples images par pathologie."""
+    grad_cam_obj   = GradCAM(model=wrapper,   target_layers=target_layers)
+    eigen_cam_obj  = EigenCAM(model=wrapper,  target_layers=target_layers)
+
+    print(f"\n{'='*60}")
+    print(f"XAI — {model_name}")
+    print(f"{'='*60}")
+
+    # Récupérer des exemples par pathologie
+    disease_samples = {}
+    for label in TARGET_DISEASES:
+        idx_class = np.where(np.array(df_test['Labels_filtered'].tolist(), dtype=object))[0]
+        # Chercher dans test_dataset
+        candidates = [i for i in range(len(df_test))
+                      if label in df_test.at[i, 'Labels_filtered']]
+        if len(candidates) >= n_samples:
+            disease_samples[label] = candidates[:n_samples]
+
+    n_diseases_show = min(7, len(disease_samples))
+    diseases_show   = list(disease_samples.keys())[:n_diseases_show]
+
+    fig, axes = plt.subplots(n_diseases_show, 3*2, figsize=(24, 4*n_diseases_show))
+    fig.suptitle(f"Grad-CAM + EigenCAM + Score de confiance — {model_name}", fontsize=13, fontweight='bold')
+
+    for row_i, label in enumerate(diseases_show):
+        cls_idx = TARGET_DISEASES.index(label)
+        sample_idx = disease_samples[label][0]
+
+        img_raw_cv = cv2.imread(
+            os.path.join(IMAGES_PATH, df_test.at[sample_idx, 'ImageID']),
+            cv2.IMREAD_GRAYSCALE
+        )
+        if img_raw_cv is None:
+            img_raw_cv = np.zeros((224,224), dtype=np.uint8)
+        img_raw_cv = _clahe.apply(img_raw_cv)
+        img_raw_cv = cv2.resize(img_raw_cv, (224, 224))
+        img_rgb    = np.stack([img_raw_cv]*3, axis=-1).astype(np.float32) / 255.0
+
+        img_tensor = val_test_transform(Image.fromarray(img_raw_cv)).unsqueeze(0).to(DEVICE)
+
+        # Score de confiance
+        with torch.no_grad():
+            logit = wrapper(img_tensor)
+            probs_all = torch.sigmoid(logit).cpu().numpy()[0]
+        conf_score = probs_all[cls_idx]
+
+        # Grad-CAM
+        grayscale_cam_grad  = grad_cam_obj(
+            input_tensor=img_tensor,
+            targets=[ClassifierOutputTarget(cls_idx)]
+        )[0]
+        cam_grad_img = show_cam_on_image(img_rgb, grayscale_cam_grad, use_rgb=True)
+
+        # EigenCAM
+        grayscale_cam_eig  = eigen_cam_obj(
+            input_tensor=img_tensor,
+            targets=[ClassifierOutputTarget(cls_idx)]
+        )[0]
+        cam_eig_img = show_cam_on_image(img_rgb, grayscale_cam_eig, use_rgb=True)
+
+        # Affichage
+        col_base = row_i * 1 if False else 0
+        axes[row_i, 0].imshow(img_rgb)
+        axes[row_i, 0].set_title(f"Original\n{label}", fontsize=8, fontweight='bold')
+        axes[row_i, 0].axis('off')
+
+        axes[row_i, 1].imshow(cam_grad_img)
+        axes[row_i, 1].set_title(f"Grad-CAM\nConf={conf_score:.2%}", fontsize=8)
+        axes[row_i, 1].axis('off')
+
+        axes[row_i, 2].imshow(cam_eig_img)
+        axes[row_i, 2].set_title(f"EigenCAM\nConf={conf_score:.2%}", fontsize=8)
+        axes[row_i, 2].axis('off')
+
+        # Top-3 prédictions (score de confiance)
+        top3_idx  = np.argsort(probs_all)[::-1][:3]
+        top3_text = "\n".join([f"{TARGET_DISEASES[j]}: {probs_all[j]:.2%}" for j in top3_idx])
+        axes[row_i, 3].text(0.05, 0.5, f"Top-3 conf:\n{top3_text}",
+                             transform=axes[row_i,3].transAxes,
+                             fontsize=8, verticalalignment='center',
+                             bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
+        axes[row_i, 3].axis('off')
+        axes[row_i, 3].set_title("Score de confiance", fontsize=8)
+
+        # Heatmap saliency (canal rouge du GradCAM)
+        axes[row_i, 4].imshow(grayscale_cam_grad, cmap='hot')
+        axes[row_i, 4].set_title("Heatmap Grad-CAM", fontsize=8)
+        axes[row_i, 4].axis('off')
+
+        axes[row_i, 5].imshow(grayscale_cam_eig, cmap='viridis')
+        axes[row_i, 5].set_title("Heatmap EigenCAM", fontsize=8)
+        axes[row_i, 5].axis('off')
+
+    plt.tight_layout()
+    fname = f'/kaggle/working/xai_gradcam_eigencam_{model_name.replace(" ","_").lower()}.png'
+    plt.savefig(fname, dpi=150, bbox_inches='tight')
+    plt.show()
+    print(f"✅ Sauvegardé → {fname}")
+
+# Lancer pour DenseNet121
+run_gradcam_eigencam(wrapper_dn, tl_dn, 'DenseNet121')

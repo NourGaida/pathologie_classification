@@ -1,0 +1,350 @@
+# =========================================================
+# SHAP ANALYSIS — VERSION CPU RAPIDE & STABLE
+# Optimisée pour Kaggle CPU
+# =========================================================
+
+import torch
+import torch.nn as nn
+import numpy as np
+import matplotlib.pyplot as plt
+import shap
+import random
+
+# =========================================================
+# DEVICE = CPU ONLY
+# =========================================================
+
+DEVICE = torch.device("cpu")
+
+torch.set_num_threads(2)
+
+print("✅ Device :", DEVICE)
+
+# =========================================================
+# CHECK VARIABLES
+# =========================================================
+
+required_vars = [
+    'model_dn',
+    'model_rn',
+    'model_en',
+    'val_dataset',
+    'test_dataset',
+    'TARGET_DISEASES'
+]
+
+missing = [v for v in required_vars if v not in globals()]
+
+if len(missing) > 0:
+
+    print("❌ Variables manquantes :")
+
+    for m in missing:
+        print("-", m)
+
+    raise ValueError("Variables absentes")
+
+# =========================================================
+# DISABLE INPLACE OPS
+# =========================================================
+
+def disable_inplace(model):
+
+    for module in model.modules():
+
+        if isinstance(module, (
+            nn.ReLU,
+            nn.LeakyReLU,
+            nn.ELU,
+            nn.SiLU
+        )):
+            module.inplace = False
+
+    return model
+
+# =========================================================
+# METADATA MOYENNE
+# =========================================================
+
+print("\n⏳ Calcul metadata moyenne...")
+
+all_meta = []
+
+n_meta_samples = min(100, len(val_dataset))
+
+for i in range(n_meta_samples):
+
+    try:
+
+        _, meta, _ = val_dataset[i]
+
+        if torch.is_tensor(meta):
+
+            all_meta.append(
+                meta.float()
+            )
+
+    except:
+        continue
+
+all_meta = torch.stack(all_meta)
+
+fixed_meta_val = (
+    all_meta.mean(dim=0)
+    .unsqueeze(0)
+)
+
+print("✅ Metadata moyenne calculée")
+print("Shape :", fixed_meta_val.shape)
+
+# =========================================================
+# WRAPPER XAI
+# =========================================================
+
+class ModelWrapperXAI(nn.Module):
+
+    def __init__(self, model, fixed_meta):
+
+        super().__init__()
+
+        self.model = model
+        self.fixed_meta = fixed_meta
+
+    def forward(self, x):
+
+        meta = self.fixed_meta.expand(
+            x.size(0),
+            -1
+        )
+
+        return self.model(x, meta)
+
+# =========================================================
+# BUILD WRAPPERS
+# =========================================================
+
+wrapper_dn = ModelWrapperXAI(
+    disable_inplace(model_dn).cpu(),
+    fixed_meta_val.cpu()
+).eval()
+
+wrapper_rn = ModelWrapperXAI(
+    disable_inplace(model_rn).cpu(),
+    fixed_meta_val.cpu()
+).eval()
+
+wrapper_en = ModelWrapperXAI(
+    disable_inplace(model_en).cpu(),
+    fixed_meta_val.cpu()
+).eval()
+
+print("✅ Wrappers XAI créés")
+
+# =========================================================
+# FAST SHAP ANALYSIS
+# =========================================================
+
+def run_shap_analysis(
+    wrapper,
+    model_name,
+    n_background=4,
+    n_explain=2
+):
+
+    print(f"\n{'═'*60}")
+    print(f"SHAP ANALYSIS — {model_name}")
+    print(f"{'═'*60}")
+
+    wrapper.eval()
+
+    # =====================================================
+    # BACKGROUND SET
+    # =====================================================
+
+    print("⏳ Construction background set...")
+
+    bg_imgs = []
+
+    indices_bg = random.sample(
+        range(len(val_dataset)),
+        min(n_background, len(val_dataset))
+    )
+
+    for idx in indices_bg:
+
+        img, _, _ = val_dataset[idx]
+
+        bg_imgs.append(img)
+
+    bg_tensor = torch.stack(bg_imgs).cpu()
+
+    print("✅ Background :", bg_tensor.shape)
+
+    # =====================================================
+    # TEST SET
+    # =====================================================
+
+    print("⏳ Chargement test set...")
+
+    test_imgs = []
+
+    indices_test = random.sample(
+        range(len(test_dataset)),
+        min(n_explain, len(test_dataset))
+    )
+
+    for idx in indices_test:
+
+        img, _, _ = test_dataset[idx]
+
+        test_imgs.append(img)
+
+    test_tensor = torch.stack(test_imgs).cpu()
+
+    print("✅ Test set :", test_tensor.shape)
+
+    # =====================================================
+    # SHAP
+    # =====================================================
+
+    try:
+
+        print("⏳ Initialisation SHAP...")
+
+        explainer = shap.GradientExplainer(
+            wrapper,
+            bg_tensor
+        )
+
+        print("⏳ Calcul SHAP values...")
+        print("⚠️ CPU → peut prendre 2 à 8 minutes")
+
+        shap_vals = explainer.shap_values(
+            test_tensor
+        )
+
+        print("✅ SHAP calculé")
+
+        # =================================================
+        # PATHOLOGIES
+        # =================================================
+
+        priority = [
+            'cardiomegaly',
+            'nodule'
+        ]
+
+        fig, axes = plt.subplots(
+            len(priority),
+            n_explain + 1,
+            figsize=(4*(n_explain+1),
+                     4*len(priority))
+        )
+
+        if len(priority) == 1:
+            axes = np.expand_dims(
+                axes,
+                axis=0
+            )
+
+        # =================================================
+        # DISPLAY
+        # =================================================
+
+        for pi, disease in enumerate(priority):
+
+            if disease not in TARGET_DISEASES:
+                continue
+
+            cls_idx = TARGET_DISEASES.index(
+                disease
+            )
+
+            shap_cls = shap_vals[cls_idx]
+
+            axes[pi,0].text(
+                0.5,
+                0.5,
+                disease,
+                fontsize=13,
+                fontweight='bold',
+                ha='center',
+                va='center',
+                transform=axes[pi,0].transAxes
+            )
+
+            axes[pi,0].axis('off')
+
+            # =============================================
+            # EXAMPLES
+            # =============================================
+
+            for ei in range(n_explain):
+
+                img_np = (
+                    test_imgs[ei]
+                    .numpy()
+                    .transpose(1,2,0)
+                )
+
+                img_np = (
+                    img_np - img_np.min()
+                ) / (
+                    img_np.max() - img_np.min() + 1e-8
+                )
+
+                shap_map = np.mean(
+                    shap_cls[ei],
+                    axis=0
+                )
+
+                # =========================================
+                # PREDICTION
+                # =========================================
+
+                with torch.no_grad():
+
+                    logits = wrapper(
+                        test_tensor[ei:ei+1]
+                    )
+
+                    prob = torch.sigmoid(
+                        logits
+                    )[0, cls_idx].item()
+
+                # =========================================
+                # DISPLAY
+                # =========================================
+
+                ax = axes[pi, ei+1]
+
+                ax.imshow(
+                    img_np[:,:,0],
+                    cmap='gray',
+                    alpha=0.7
+                )
+
+                vmax = np.abs(shap_map).max()
+
+                ax.imshow(
+                    shap_map,
+                    cmap='RdBu_r',
+                    alpha=0.45,
+                    vmin=-vmax,
+                    vmax=vmax
+                )
+
+                ax.set_title(
+                    f"P={prob:.2%}",
+                    fontsize=9
+                )
+
+                ax.axis('off')
+
+        # =================================================
+        # SAVE
+        # =================================================
+
+        plt.suptitle(
+            f"SHAP — {model_name}",
+  

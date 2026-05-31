@@ -1,0 +1,2 @@
+run_gradcam_eigencam(wrapper_rn, tl_rn, 'ResNet50')
+run_gradcam_eigencam(wrapper_en, tl_en, 'EfficientNet-B4')

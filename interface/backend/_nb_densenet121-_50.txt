@@ -1,0 +1,63 @@
+# Le F1=0.07 vient d'un seuil unique 0.5 inadapté au déséquilibre
+# → chercher le seuil optimal par classe sur le val set
+
+from sklearn.metrics import f1_score
+
+@torch.no_grad()
+def get_val_probs(model, loader):
+    model.eval()
+    all_probs, all_labels = [], []
+    for imgs, metas, labels in loader:
+        imgs, metas = imgs.to(DEVICE), metas.to(DEVICE)
+        with autocast(device_type=AMP_DEVICE, enabled=USE_AMP):
+            logits = model(imgs, metas)
+        all_probs.append(torch.sigmoid(logits).cpu().numpy())
+        all_labels.append(labels.numpy())
+    return np.vstack(all_probs), np.vstack(all_labels)
+
+
+def find_optimal_thresholds(y_true, y_probs, thresholds=None):
+    """Cherche le seuil F1-optimal par classe sur le val set."""
+    if thresholds is None:
+        thresholds = np.arange(0.1, 0.9, 0.02)
+    
+    best_thresholds = []
+    print(f"\n{'Label':<30} {'Best threshold':>15} {'Best F1':>10}")
+    print("-" * 58)
+    
+    for i, label in enumerate(TARGET_DISEASES):
+        if y_true[:, i].sum() == 0:
+            best_thresholds.append(0.5)
+            continue
+        best_f1, best_t = 0.0, 0.5
+        for t in thresholds:
+            preds = (y_probs[:, i] >= t).astype(int)
+            f1    = f1_score(y_true[:, i], preds, zero_division=0)
+            if f1 > best_f1:
+                best_f1, best_t = f1, t
+        best_thresholds.append(best_t)
+        print(f"  {label:<30} {best_t:>14.2f} {best_f1:>10.4f}")
+    
+    return np.array(best_thresholds)
+
+
+# Récupérer les probs val
+val_probs, val_true = get_val_probs(trainer.model, val_loader)
+
+# Trouver les seuils optimaux
+optimal_thresholds = find_optimal_thresholds(val_true, val_probs)
+
+# Réévaluer le test avec ces seuils
+y_pred_optimal = (y_probs_test >= optimal_thresholds).astype(int)
+
+f1_opt  = f1_score(y_true_test, y_pred_optimal, average='macro',  zero_division=0)
+f1_micro= f1_score(y_true_test, y_pred_optimal, average='micro',  zero_division=0)
+
+print(f"\n{'─'*50}")
+print(f"F1 macro  seuil=0.5   : {test_metrics['f1_macro']:.4f}")
+print(f"F1 macro  seuil optimal: {f1_opt:.4f}   ← amélioration attendue")
+print(f"F1 micro  seuil optimal: {f1_micro:.4f}")
+
+# Sauvegarder les seuils pour l'inférence future
+np.save('/kaggle/working/optimal_thresholds.npy', optimal_thresholds)
+print("\n✅ Seuils sauvegardés → optimal_thresholds.npy")

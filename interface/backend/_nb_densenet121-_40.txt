@@ -1,0 +1,105 @@
+class DenseNet121PadChest(nn.Module):
+    """DenseNet121 + branche métadonnées — 14 pathologies cibles."""
+    def __init__(self, n_classes=14, n_meta=6, pretrained=True, dropout=0.4):
+        super().__init__()
+        self.backbone = timm.create_model(
+            'densenet121', pretrained=pretrained, num_classes=0, global_pool='avg'
+        )
+        feat_dim = self.backbone.num_features   # 1024
+        self.meta_branch = nn.Sequential(
+            nn.Linear(n_meta, 64), nn.BatchNorm1d(64), nn.ReLU(inplace=True),
+            nn.Dropout(0.3), nn.Linear(64, 32), nn.ReLU(inplace=True)
+        )
+        self.classifier = nn.Sequential(
+            nn.Dropout(dropout), nn.Linear(feat_dim + 32, 512),
+            nn.BatchNorm1d(512), nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.75), nn.Linear(512, n_classes)
+        )
+        self._init_weights()
+
+    def _init_weights(self):
+        for m in [self.meta_branch, self.classifier]:
+            for layer in m.modules():
+                if isinstance(layer, nn.Linear):
+                    nn.init.kaiming_normal_(layer.weight)
+                    nn.init.zeros_(layer.bias)
+
+    def forward(self, image, metadata):
+        return self.classifier(
+            torch.cat([self.backbone(image), self.meta_branch(metadata)], dim=1)
+        )
+    def freeze_backbone(self):
+        for p in self.backbone.parameters(): p.requires_grad = False
+    def unfreeze_backbone(self):
+        for p in self.backbone.parameters(): p.requires_grad = True
+    def get_param_groups(self, lr_head=1e-3, lr_backbone=1e-4):
+        return [
+            {'params': self.backbone.parameters(),    'lr': lr_backbone},
+            {'params': self.meta_branch.parameters(), 'lr': lr_head},
+            {'params': self.classifier.parameters(),  'lr': lr_head},
+        ]
+
+
+class EfficientNetB4PadChest(nn.Module):
+    """EfficientNet-B4 + branche métadonnées — 14 pathologies cibles."""
+    def __init__(self, n_classes=14, n_meta=6, pretrained=True, dropout=0.4):
+        super().__init__()
+        self.backbone = timm.create_model(
+            'efficientnet_b4', pretrained=pretrained,
+            num_classes=0, global_pool='avg', drop_rate=0.3
+        )
+        feat_dim = self.backbone.num_features   # 1792
+        self.meta_branch = nn.Sequential(
+            nn.Linear(n_meta, 64), nn.BatchNorm1d(64), nn.ReLU(inplace=True),
+            nn.Dropout(0.3), nn.Linear(64, 32), nn.ReLU(inplace=True)
+        )
+        self.classifier = nn.Sequential(
+            nn.Dropout(dropout), nn.Linear(feat_dim + 32, 768),
+            nn.BatchNorm1d(768), nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.6), nn.Linear(768, 256),
+            nn.ReLU(inplace=True), nn.Dropout(dropout * 0.4),
+            nn.Linear(256, n_classes)
+        )
+        self._init_weights()
+
+    def _init_weights(self):
+        for m in [self.meta_branch, self.classifier]:
+            for layer in m.modules():
+                if isinstance(layer, nn.Linear):
+                    nn.init.kaiming_normal_(layer.weight)
+                    nn.init.zeros_(layer.bias)
+
+    def forward(self, image, metadata):
+        return self.classifier(
+            torch.cat([self.backbone(image), self.meta_branch(metadata)], dim=1)
+        )
+    def freeze_backbone(self):
+        for p in self.backbone.parameters(): p.requires_grad = False
+    def unfreeze_backbone(self):
+        for p in self.backbone.parameters(): p.requires_grad = True
+    def get_param_groups(self, lr_head=1e-3, lr_backbone=1e-4):
+        return [
+            {'params': self.backbone.parameters(),    'lr': lr_backbone},
+            {'params': self.meta_branch.parameters(), 'lr': lr_head},
+            {'params': self.classifier.parameters(),  'lr': lr_head},
+        ]
+
+
+def build_model(name, n_classes=14, n_meta=6, pretrained=True):
+    models_map = {
+        'densenet121'    : DenseNet121PadChest,
+        'efficientnet_b4': EfficientNetB4PadChest,
+    }
+    assert name in models_map, f"Modèle inconnu : {name}"
+    model = models_map[name](n_classes, n_meta, pretrained).to(DEVICE)
+    total     = sum(p.numel() for p in model.parameters())
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"[{name}]  {total/1e6:.1f}M params | feat_dim={model.backbone.num_features} | n_classes={n_classes}")
+    return model
+
+# Test rapide
+_m = build_model('densenet121', n_classes=NUM_CLASSES, n_meta=N_META)
+_x = torch.randn(2, 3, 224, 224).to(DEVICE)
+_m_in = torch.randn(2, N_META).to(DEVICE)
+print(f"Forward pass test : {_m(_x, _m_in).shape}")   # (2, 14)
+del _m, _x, _m_in

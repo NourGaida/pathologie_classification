@@ -1,0 +1,69 @@
+import os, ast, cv2, json, time, random, warnings
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from PIL import Image
+from tqdm import tqdm
+from collections import Counter
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import timm
+from torch.amp import GradScaler, autocast
+from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms as T
+
+from sklearn.preprocessing import MultiLabelBinarizer
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import (
+    roc_auc_score, f1_score, average_precision_score,
+    accuracy_score, classification_report, confusion_matrix,
+    precision_score, recall_score, hamming_loss,
+    precision_recall_curve
+)
+
+# XAI
+try:
+    from pytorch_grad_cam import GradCAM, EigenCAM
+    from pytorch_grad_cam.utils.image import show_cam_on_image
+    from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+    XAI_AVAILABLE = True
+    print("✅ pytorch-grad-cam disponible")
+except ImportError:
+    XAI_AVAILABLE = False
+    print("⚠️  pytorch-grad-cam non installé — pip install grad-cam")
+
+try:
+    import shap
+    SHAP_AVAILABLE = True
+    print("✅ SHAP disponible")
+except ImportError:
+    SHAP_AVAILABLE = False
+    print("⚠️  SHAP non installé — pip install shap")
+
+warnings.filterwarnings('ignore')
+sns.set_style("whitegrid")
+plt.rcParams['figure.figsize'] = (12, 6)
+
+# ── Chemins ───────────────────────────────────────────────────────
+CSV_PATH    = "/kaggle/input/datasets/wassimfouratelamri/padchest224-complete/PADCHEST_chest_x_ray_images_labels_160K_01.02.19.csv"
+IMAGES_PATH = "/kaggle/input/datasets/wassimfouratelamri/padchest224-complete/images-224/images-224"
+CKPT_DIR    = "/kaggle/working/checkpoints"
+os.makedirs(CKPT_DIR, exist_ok=True)
+
+# ── Pathologies cibles (14 classes) ──────────────────────────────
+TARGET_DISEASES = [
+    'normal', 'copd signs', 'cardiomegaly', 'pleural effusion',
+    'interstitial pattern', 'alveolar pattern', 'nodule', 'atelectasis',
+    'hilar enlargement', 'pulmonary fibrosis', 'tuberculosis sequelae',
+    'rib fracture', 'pneumothorax', 'mediastinal mass'
+]
+NUM_CLASSES = len(TARGET_DISEASES)
+
+DEVICE     = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+AMP_DEVICE = DEVICE.type
+USE_AMP    = DEVICE.type == 'cuda'
+print(f"Device : {DEVICE}  |  AMP : {USE_AMP}  |  Classes : {NUM_CLASSES}")

@@ -1,0 +1,34 @@
+fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+# F1 par classe : seuil 0.5 vs optimal
+f1_default = [f1_score(y_true_test[:, i], (y_probs_test[:, i] >= 0.5).astype(int), zero_division=0)
+              for i in range(NUM_CLASSES)]
+f1_optimal = [f1_score(y_true_test[:, i], y_pred_optimal[:, i], zero_division=0)
+              for i in range(NUM_CLASSES)]
+
+x = np.arange(NUM_CLASSES)
+w = 0.35
+axes[0].bar(x - w/2, f1_default, w, label='Threshold=0.5', color='tomato',   alpha=0.8)
+axes[0].bar(x + w/2, f1_optimal, w, label='Threshold opt', color='seagreen', alpha=0.8)
+axes[0].set_xticks(x)
+axes[0].set_xticklabels(TARGET_DISEASES, rotation=45, ha='right', fontsize=8)
+axes[0].set_ylabel("F1 Score")
+axes[0].set_title("Per-Class F1 : Fixed vs Optimal Threshold", fontweight='bold')
+axes[0].legend()
+axes[0].grid(alpha=0.3)
+
+# Seuils optimaux par classe
+axes[1].bar(range(NUM_CLASSES), optimal_thresholds,
+            color=sns.color_palette('viridis', NUM_CLASSES))
+axes[1].axhline(0.5, color='red', linestyle='--', alpha=0.6, label='Default=0.5')
+axes[1].set_xticks(range(NUM_CLASSES))
+axes[1].set_xticklabels(TARGET_DISEASES, rotation=45, ha='right', fontsize=8)
+axes[1].set_ylabel("Optimal Threshold")
+axes[1].set_title("Optimal Threshold per Class", fontweight='bold')
+axes[1].legend()
+axes[1].grid(alpha=0.3)
+
+plt.suptitle("Threshold Optimization Impact", fontsize=14, fontweight='bold')
+plt.tight_layout()
+plt.savefig('/kaggle/working/threshold_optimization.png', dpi=150, bbox_inches='tight')
+plt.show()

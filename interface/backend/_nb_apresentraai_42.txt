@@ -1,0 +1,130 @@
+# ==========================================================
+# RECONSTRUCTION COMPLÈTE DU PIPELINE
+# DATASETS + LOADERS + MODELS
+# ==========================================================
+
+import torch
+from torch.utils.data import DataLoader
+
+print("⏳ Vérification variables...")
+
+needed_vars = [
+    'train_dataset',
+    'val_dataset',
+    'test_dataset',
+    'build_model',
+    'NUM_CLASSES',
+    'DEVICE'
+]
+
+for v in needed_vars:
+    print(f"{v:<15} :", v in globals())
+
+# ==========================================================
+# Vérification DATASETS
+# ==========================================================
+
+if 'train_dataset' not in globals():
+
+    raise Exception(
+        "\n❌ train_dataset n'existe plus.\n"
+        "Tu dois réexécuter la cellule de création des datasets "
+        "(PadChestDataset / transformations / split train-val-test).\n"
+    )
+
+# ==========================================================
+# Reconstruction loaders
+# ==========================================================
+
+print("\n⏳ Reconstruction DataLoaders...")
+
+train_loader = DataLoader(
+    train_dataset,
+    batch_size=16,
+    shuffle=True,
+    num_workers=2,
+    pin_memory=True
+)
+
+val_loader = DataLoader(
+    val_dataset,
+    batch_size=16,
+    shuffle=False,
+    num_workers=2,
+    pin_memory=True
+)
+
+test_loader = DataLoader(
+    test_dataset,
+    batch_size=16,
+    shuffle=False,
+    num_workers=2,
+    pin_memory=True
+)
+
+print("✅ DataLoaders OK")
+
+# ==========================================================
+# Détection automatique metadata
+# ==========================================================
+
+sample_imgs, sample_meta, sample_labels = next(iter(train_loader))
+
+N_META = sample_meta.shape[1]
+
+print(f"\n✅ N_META détecté : {N_META}")
+
+# ==========================================================
+# Reconstruction modèles
+# ==========================================================
+
+print("\n⏳ Reconstruction modèles...")
+
+model_dn = build_model(
+    'densenet121',
+    NUM_CLASSES,
+    N_META
+).to(DEVICE)
+
+model_rn = build_model(
+    'resnet50',
+    NUM_CLASSES,
+    N_META
+).to(DEVICE)
+
+model_en = build_model(
+    'efficientnet_b4',
+    NUM_CLASSES,
+    N_META
+).to(DEVICE)
+
+# ==========================================================
+# Fake trainers compatibles avec ton notebook
+# ==========================================================
+
+trainer_dn = type('tmp', (), {})()
+trainer_dn.model = model_dn
+
+trainer_rn = type('tmp', (), {})()
+trainer_rn.model = model_rn
+
+trainer_en = type('tmp', (), {})()
+trainer_en.model = model_en
+
+print("✅ Modèles reconstruits")
+
+# ==========================================================
+# Vérification finale
+# ==========================================================
+
+print("\n════════════════════════════════════")
+print("PIPELINE RESTAURÉ")
+print("════════════════════════════════════")
+
+print("train_loader :", len(train_loader))
+print("val_loader   :", len(val_loader))
+print("test_loader  :", len(test_loader))
+
+print("\nDenseNet121     OK")
+print("ResNet50        OK")
+print("EfficientNet-B4 OK")

@@ -1,0 +1,20 @@
+# Virtual env
+.venv/
+
+# Dataset
+archive/
+processed_dataset/
+
+# Jupyter cache
+.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.pyc
+
+# PyTorch
+*.pth
+*.pt
+
+# VSCode
+.vscode/

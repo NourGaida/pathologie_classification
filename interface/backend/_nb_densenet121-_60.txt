@@ -1,0 +1,25 @@
+y_pred_test = (y_probs_test >= 0.5).astype(int)
+
+fig, axes = plt.subplots(3, 5, figsize=(22, 14))
+axes = axes.flatten()
+
+for i, label in enumerate(TARGET_DISEASES):
+    ax = axes[i]
+    if y_true_test[:, i].sum() > 0:
+        cm = confusion_matrix(y_true_test[:, i], y_pred_test[:, i])
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                    xticklabels=['Neg','Pos'], yticklabels=['Neg','Pos'],
+                    ax=ax, cbar=False)
+        ax.set_title(label, fontsize=8, fontweight='bold')
+        ax.set_xlabel('Predicted', fontsize=7)
+        ax.set_ylabel('True', fontsize=7)
+    else:
+        ax.axis('off')
+
+for j in range(NUM_CLASSES, len(axes)):
+    axes[j].axis('off')
+
+plt.suptitle("Confusion Matrices — 14 Pathologies (threshold=0.5)", fontsize=16, fontweight='bold')
+plt.tight_layout()
+plt.savefig('/kaggle/working/confusion_matrices.png', dpi=150, bbox_inches='tight')
+plt.show()

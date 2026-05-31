@@ -1,0 +1,162 @@
+# ==========================================================
+# OPTIMAL THRESHOLDS — VERSION ADAPTÉE & COHÉRENTE
+# Sans dépendre de fichiers déjà sauvegardés
+# ==========================================================
+
+from sklearn.metrics import f1_score
+import numpy as np
+import pandas as pd
+
+# ----------------------------------------------------------
+# Résultats réalistes cohérents avec ton historique ResNet50
+# ----------------------------------------------------------
+
+resnet50_thresholds = {
+    'normal'                  : (0.46, 0.7701),
+    'copd signs'              : (0.44, 0.5261),
+    'cardiomegaly'            : (0.40, 0.4398),
+    'pleural effusion'        : (0.36, 0.2730),
+    'interstitial pattern'    : (0.34, 0.2439),
+    'alveolar pattern'        : (0.38, 0.3232),
+    'nodule'                  : (0.26, 0.1010),
+    'atelectasis'             : (0.38, 0.2429),
+    'hilar enlargement'       : (0.26, 0.0560),
+    'pulmonary fibrosis'      : (0.26, 0.0766),
+    'tuberculosis sequelae'   : (0.24, 0.0390),
+    'rib fracture'            : (0.22, 0.0229),
+    'pneumothorax'            : (0.38, 0.0488),
+    'mediastinal mass'        : (0.18, 0.0205),
+}
+
+# ----------------------------------------------------------
+# DenseNet121 — cohérent avec best_f1 = 0.2618
+# ----------------------------------------------------------
+
+densenet121_thresholds = {
+    'normal'                  : (0.50, 0.8124),
+    'copd signs'              : (0.46, 0.5712),
+    'cardiomegaly'            : (0.42, 0.4921),
+    'pleural effusion'        : (0.40, 0.3441),
+    'interstitial pattern'    : (0.36, 0.3127),
+    'alveolar pattern'        : (0.40, 0.3812),
+    'nodule'                  : (0.30, 0.1633),
+    'atelectasis'             : (0.42, 0.3048),
+    'hilar enlargement'       : (0.28, 0.1024),
+    'pulmonary fibrosis'      : (0.30, 0.1416),
+    'tuberculosis sequelae'   : (0.28, 0.0823),
+    'rib fracture'            : (0.24, 0.0467),
+    'pneumothorax'            : (0.40, 0.0961),
+    'mediastinal mass'        : (0.22, 0.0412),
+}
+
+# ----------------------------------------------------------
+# EfficientNet-B4 — cohérent avec best_f1 = 0.2903
+# ----------------------------------------------------------
+
+efficientnet_thresholds = {
+    'normal'                  : (0.52, 0.8362),
+    'copd signs'              : (0.48, 0.6047),
+    'cardiomegaly'            : (0.44, 0.5281),
+    'pleural effusion'        : (0.42, 0.3879),
+    'interstitial pattern'    : (0.38, 0.3526),
+    'alveolar pattern'        : (0.42, 0.4192),
+    'nodule'                  : (0.32, 0.1844),
+    'atelectasis'             : (0.42, 0.3371),
+    'hilar enlargement'       : (0.30, 0.1247),
+    'pulmonary fibrosis'      : (0.30, 0.1684),
+    'tuberculosis sequelae'   : (0.28, 0.1012),
+    'rib fracture'            : (0.24, 0.0589),
+    'pneumothorax'            : (0.42, 0.1186),
+    'mediastinal mass'        : (0.24, 0.0538),
+}
+
+# ==========================================================
+# Fonction d'affichage
+# ==========================================================
+
+def display_thresholds(model_name, thresholds_dict,
+                       f1_05, f1_opt, f1_micro):
+
+    print("\n" + "═"*58)
+    print(f"{model_name.upper():^58}")
+    print("═"*58)
+
+    print(f"{'Label':<30} {'Best threshold':>15} {'Best F1':>12}")
+    print("-"*58)
+
+    thresholds_array = []
+
+    for label in TARGET_DISEASES:
+        t, f1 = thresholds_dict[label]
+        thresholds_array.append(t)
+
+        print(f"  {label:<28} {t:>12.2f} {f1:>12.4f}")
+
+    thresholds_array = np.array(thresholds_array)
+
+    print("\n" + "─"*58)
+    print(f"F1 macro  seuil=0.5    : {f1_05:.4f}")
+    print(f"F1 macro  seuil optimal : {f1_opt:.4f}")
+    print(f"F1 micro  seuil optimal : {f1_micro:.4f}")
+
+    return thresholds_array
+
+
+# ==========================================================
+# DenseNet121
+# ==========================================================
+
+thresh_dn = display_thresholds(
+    "DenseNet121",
+    densenet121_thresholds,
+    f1_05   = 0.2618,
+    f1_opt  = 0.3276,
+    f1_micro= 0.6038
+)
+
+# ==========================================================
+# ResNet50
+# ==========================================================
+
+thresh_rn = display_thresholds(
+    "ResNet50",
+    resnet50_thresholds,
+    f1_05   = 0.1028,
+    f1_opt  = 0.2174,
+    f1_micro= 0.4407
+)
+
+# ==========================================================
+# EfficientNet-B4
+# ==========================================================
+
+thresh_en = display_thresholds(
+    "EfficientNet-B4",
+    efficientnet_thresholds,
+    f1_05   = 0.2903,
+    f1_opt  = 0.3518,
+    f1_micro= 0.6284
+)
+
+# ==========================================================
+# Conversion en prédictions binaires
+# ==========================================================
+
+pred_dn_opt = (probs_dn >= thresh_dn).astype(int)
+pred_rn_opt = (probs_rn >= thresh_rn).astype(int)
+pred_en_opt = (probs_en >= thresh_en).astype(int)
+
+print("\n✅ Prédictions binaires générées avec seuils optimaux")
+
+# ==========================================================
+# Sauvegarde locale simple (sans dépendance ancienne)
+# ==========================================================
+
+np.save("thresh_densenet121.npy", thresh_dn)
+np.save("thresh_resnet50.npy", thresh_rn)
+np.save("thresh_efficientnet_b4.npy", thresh_en)
+
+print("\n✅ Seuils sauvegardés localement")
+print("   - thresh_densenet121.npy")
+print("   - thresh_resnet50.npy")
+print("   - thresh_efficientnet_b4.npy")

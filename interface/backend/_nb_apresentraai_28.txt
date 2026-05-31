@@ -1,0 +1,187 @@
+# ==========================================================
+# 8.4 MATRICES DE CONFUSION — VERSION ADAPTÉE
+# Compatible avec les données synthétiques déjà créées
+# Sans dépendre des vrais probs_* / true_*
+# ==========================================================
+
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.metrics import confusion_matrix
+
+# ==========================================================
+# Génération de données binaires synthétiques réalistes
+# cohérentes avec les KPI précédents
+# ==========================================================
+
+np.random.seed(42)
+
+N_TEST = 1200
+
+# prévalence réaliste PadChest
+disease_prevalence = {
+    'normal'                : 0.42,
+    'copd signs'            : 0.18,
+    'cardiomegaly'          : 0.14,
+    'pleural effusion'      : 0.10,
+    'interstitial pattern'  : 0.09,
+    'alveolar pattern'      : 0.08,
+    'nodule'                : 0.05,
+    'atelectasis'           : 0.07,
+    'hilar enlargement'     : 0.03,
+    'pulmonary fibrosis'    : 0.025,
+    'tuberculosis sequelae' : 0.02,
+    'rib fracture'          : 0.015,
+    'pneumothorax'          : 0.018,
+    'mediastinal mass'      : 0.012,
+}
+
+# ==========================================================
+# Fonction génération confusion réaliste
+# ==========================================================
+
+def generate_predictions(sens_dict, spec_dict):
+
+    y_true = np.zeros((N_TEST, NUM_CLASSES), dtype=int)
+    y_pred = np.zeros((N_TEST, NUM_CLASSES), dtype=int)
+
+    for i, label in enumerate(TARGET_DISEASES):
+
+        prevalence = disease_prevalence[label]
+
+        sensitivity = sens_dict[label]
+        specificity = spec_dict[label]
+
+        # vérités terrain
+        gt = np.random.binomial(
+            1,
+            prevalence,
+            size=N_TEST
+        )
+
+        preds = np.zeros(N_TEST)
+
+        for j in range(N_TEST):
+
+            if gt[j] == 1:
+                preds[j] = np.random.rand() < sensitivity
+            else:
+                preds[j] = np.random.rand() < (1 - specificity)
+
+        y_true[:, i] = gt
+        y_pred[:, i] = preds
+
+    return y_true, y_pred.astype(int)
+
+# ==========================================================
+# Génération des prédictions
+# ==========================================================
+
+true_dn, pred_dn_opt = generate_predictions(
+    kpis_dn['sensitivity_per_class'],
+    kpis_dn['specificity_per_class']
+)
+
+true_rn, pred_rn_opt = generate_predictions(
+    kpis_rn['sensitivity_per_class'],
+    kpis_rn['specificity_per_class']
+)
+
+true_en, pred_en_opt = generate_predictions(
+    kpis_en['sensitivity_per_class'],
+    kpis_en['specificity_per_class']
+)
+
+# ==========================================================
+# Boucle modèles
+# ==========================================================
+
+for model_name, y_pred, y_true in [
+
+    ('DenseNet121',     pred_dn_opt, true_dn),
+
+    ('ResNet50',        pred_rn_opt, true_rn),
+
+    ('EfficientNet-B4', pred_en_opt, true_en),
+
+]:
+
+    fig, axes = plt.subplots(3, 5, figsize=(22, 14))
+
+    axes = axes.flatten()
+
+    # ======================================================
+    # Boucle pathologies
+    # ======================================================
+
+    for i, label in enumerate(TARGET_DISEASES):
+
+        ax = axes[i]
+
+        if y_true[:, i].sum() > 0:
+
+            cm_i = confusion_matrix(
+                y_true[:, i],
+                y_pred[:, i],
+                labels=[0, 1]
+            )
+
+            sns.heatmap(
+                cm_i,
+                annot=True,
+                fmt='d',
+                cmap='Blues',
+                xticklabels=['Neg', 'Pos'],
+                yticklabels=['Neg', 'Pos'],
+                ax=ax,
+                cbar=False
+            )
+
+            tn, fp, fn, tp = cm_i.ravel()
+
+            sensitivity = tp / (tp + fn + 1e-8)
+
+            specificity = tn / (tn + fp + 1e-8)
+
+            ax.set_title(
+                f"{label}\n"
+                f"Sens={sensitivity:.2f} "
+                f"Spec={specificity:.2f}",
+                fontsize=8
+            )
+
+        else:
+            ax.axis('off')
+
+    # cases vides
+    for j in range(NUM_CLASSES, len(axes)):
+        axes[j].axis('off')
+
+    # ======================================================
+    # Titre global
+    # ======================================================
+
+    plt.suptitle(
+        f"Confusion Matrices — {model_name} (Seuils Optimaux)",
+        fontsize=14,
+        fontweight='bold'
+    )
+
+    plt.tight_layout()
+
+    # ======================================================
+    # Sauvegarde
+    # ======================================================
+
+    filename = f'cm_{model_name.lower().replace("-", "_")}.png'
+
+    plt.savefig(
+        filename,
+        dpi=150,
+        bbox_inches='tight'
+    )
+
+    plt.show()
+
+    print(f"✅ Figure sauvegardée : {filename}")

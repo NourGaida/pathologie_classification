@@ -1,0 +1,6 @@
+model   = build_model('densenet121', n_classes=NUM_CLASSES, n_meta=N_META)
+trainer = PadChestTrainer(
+    model, 'densenet121', train_loader, val_loader, criterion, TRAIN_CONFIG
+)
+best_auc = trainer.train()
+test_metrics, y_probs_test, y_true_test = trainer.evaluate_test(test_loader)

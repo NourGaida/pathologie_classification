@@ -1,0 +1,28 @@
+def build_metadata_features(df_input):
+    meta = pd.DataFrame()
+    meta['age_norm']  = (df_input['Age'] - 18) / (100 - 18)
+    meta['sex_M']     = (df_input['PatientSex_DICOM'] == 'M').astype(float)
+    meta['sex_F']     = (df_input['PatientSex_DICOM'] == 'F').astype(float)
+    meta['proj_PA']   = (df_input['Projection'] == 'PA').astype(float)
+    meta['proj_AP']   = (df_input['Projection'] == 'AP').astype(float)
+    meta['year_norm'] = (df_input['StudyDate_DICOM'].dt.year - 2009) / (2017 - 2009)
+    return meta.fillna(0.5)
+
+patients = df_clean['PatientID'].unique()
+train_p, temp_p = train_test_split(patients, test_size=0.30, random_state=42)
+val_p, test_p   = train_test_split(temp_p,   test_size=0.50, random_state=42)
+
+df_train = df_clean[df_clean['PatientID'].isin(train_p)].reset_index(drop=True)
+df_val   = df_clean[df_clean['PatientID'].isin(val_p)].reset_index(drop=True)
+df_test  = df_clean[df_clean['PatientID'].isin(test_p)].reset_index(drop=True)
+
+assert len(set(train_p) & set(val_p)) == 0
+assert len(set(train_p) & set(test_p)) == 0
+print(f"✅ No leakage — Train:{len(df_train):,} Val:{len(df_val):,} Test:{len(df_test):,}")
+
+y_train = mlb.transform(df_train['Labels_filtered'].tolist())
+y_val   = mlb.transform(df_val['Labels_filtered'].tolist())
+y_test  = mlb.transform(df_test['Labels_filtered'].tolist())
+
+N_META = 6
+print(f"y_train:{y_train.shape} y_val:{y_val.shape} y_test:{y_test.shape}")

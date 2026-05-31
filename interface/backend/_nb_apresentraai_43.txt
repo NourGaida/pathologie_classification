@@ -1,0 +1,6 @@
+!pip install grad-cam shap -q
+from pytorch_grad_cam import GradCAM, EigenCAM
+from pytorch_grad_cam.utils.image import show_cam_on_image
+from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+import shap
+print("✅ XAI libs prêtes")

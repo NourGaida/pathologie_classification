@@ -1,0 +1,1 @@
+### 7.4 Matrice de confusion par pathologie (threshold=0.5)

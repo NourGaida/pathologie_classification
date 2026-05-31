@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --color-medical-50: #f0f9ff;
+  --color-medical-100: #e0f2fe;
+  --color-medical-200: #bae6fd;
+  --color-medical-300: #7dd3fc;
+  --color-medical-400: #38bdf8;
+  --color-medical-500: #0ea5e9;
+  --color-medical-600: #0284c7;
+  --color-medical-700: #0369a1;
+  --color-medical-800: #075985;
+  --color-medical-900: #0c4a6e;
+  --color-accent-cyan: #22d3ee;
+  --color-accent-violet: #8b5cf6;
+  --color-accent-emerald: #10b981;
+}
+
+@layer base {
+  * {
+    @apply border-slate-200/60 dark:border-slate-700/60;
+  }
+
+  html {
+    @apply scroll-smooth antialiased;
+  }
+
+  body {
+    @apply min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+    font-family: var(--font-sans);
+  }
+
+  ::selection {
+    @apply bg-cyan-500/30 text-cyan-900 dark:text-cyan-100;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/70 backdrop-blur-xl border border-white/20 shadow-xl dark:bg-slate-900/60 dark:border-slate-700/40;
+  }
+
+  .glass-strong {
+    @apply bg-white/85 backdrop-blur-2xl border border-white/30 shadow-2xl dark:bg-slate-900/80 dark:border-slate-600/50;
+  }
+
+  .gradient-mesh {
+    background:
+      radial-gradient(ellipse 80% 50% at 20% -10%, rgba(14, 165, 233, 0.15), transparent),
+      radial-gradient(ellipse 60% 40% at 80% 0%, rgba(139, 92, 246, 0.12), transparent),
+      radial-gradient(ellipse 50% 30% at 50% 100%, rgba(16, 185, 129, 0.08), transparent);
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-cyan-500 via-sky-500 to-violet-500 bg-clip-text text-transparent;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(148 163 184 / 0.5) transparent;
+  }
+}

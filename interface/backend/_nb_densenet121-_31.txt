@@ -1,0 +1,15 @@
+def build_metadata_features(df_input):
+    """Construit un vecteur de 6 métadonnées normalisées par image."""
+    meta = pd.DataFrame()
+    meta['age_norm']  = (df_input['Age'] - 18) / (100 - 18)
+    meta['sex_M']     = (df_input['PatientSex_DICOM'] == 'M').astype(float)
+    meta['sex_F']     = (df_input['PatientSex_DICOM'] == 'F').astype(float)
+    meta['proj_PA']   = (df_input['Projection'] == 'PA').astype(float)
+    meta['proj_AP']   = (df_input['Projection'] == 'AP').astype(float)
+    meta['year_norm'] = (df_input['StudyDate_DICOM'].dt.year - 2009) / (2017 - 2009)
+    return meta.fillna(0.5)
+
+meta_features = build_metadata_features(df_clean)
+N_META = meta_features.shape[1]
+print(f"Features métadonnées : {N_META}")
+print(meta_features.describe().round(3))

@@ -1,0 +1,29 @@
+{
+  "epoch": 10,
+  "best_auc": 0.7871729159398981,
+  "val_metrics": {
+    "auc_macro": 0.7871729159398981,
+    "map": 0.24077788198639619,
+    "f1_macro": 0.12022935318268364,
+    "f1_micro": 0.5493782879005261,
+    "loss": 0.18365876777034226
+  },
+  "target_diseases": [
+    "normal",
+    "copd signs",
+    "cardiomegaly",
+    "pleural effusion",
+    "interstitial pattern",
+    "alveolar pattern",
+    "nodule",
+    "atelectasis",
+    "hilar enlargement",
+    "pulmonary fibrosis",
+    "tuberculosis sequelae",
+    "rib fracture",
+    "pneumothorax",
+    "mediastinal mass"
+  ],
+  "n_classes": 14,
+  "n_meta": 6
+}

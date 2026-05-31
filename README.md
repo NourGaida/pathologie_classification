@@ -32,6 +32,7 @@ tuberculosis sequelae · rib fracture · pneumothorax · mediastinal mass
 
 <img width="814" height="682" alt="Screenshot 2026-05-24 144557" src="https://github.com/user-attachments/assets/548f7072-b0cf-487f-b8cf-c3708566e678" />
 Distribution of the 14 pathologies and their co-occurrence matrix
+
 ### Architecture
 Each model follows the same pattern: a pretrained CNN backbone + a metadata branch (age, sex, projection, year) that are concatenated before the final classifier.
 Input Image (224×224×3)          Metadata (6 features)
